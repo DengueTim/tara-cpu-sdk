@@ -33,6 +33,7 @@ using namespace cv::ximgproc;
 
 namespace Tara
 {
+
 //Constructor
 TaraCamParameters::TaraCamParameters(void)
 {
@@ -182,7 +183,6 @@ BOOL TaraCamParameters::RemapStereoImage(cv::Mat mCamLeftFrame, cv::Mat mCamRigh
 		resize(*rRightImage, *rRightImage,  cv::Size(actualWidth, actualHeight));
 		resize(*rLeftImage, *rLeftImage, cv::Size(actualWidth, actualHeight));
 	}
-		
 	return TRUE;
 }
 
@@ -204,7 +204,7 @@ Disparity::~Disparity()
 	_CameraDevice.release();
 
 	//Relase the vector
-	vector<cv::Mat>().swap(StereoFrames);
+	//vector<cv::Mat>().swap(StereoFrames);
 
 	//Deinitialise the extension unit
 	DeinitExtensionUnit();
@@ -244,7 +244,9 @@ BOOL Disparity::InitCamera(bool GenerateDisparity, bool FilteredDisparityMap)
 	}
 
 	//Setting up Y16 Format
-	_CameraDevice.set(CV_CAP_PROP_FOURCC, CV_FOURCC('Y', '1', '6', ' '));
+	//_CameraDevice.set(CV_CAP_PROP_FOURCC, CV_FOURCC('Y', '1', '6', ' '));
+	//Setting up BGR 8-8-8 Format
+	_CameraDevice.set(CV_CAP_PROP_FOURCC, CV_FOURCC('R', 'G', 'R', '3'));
 
 	//Setting up FrameRate
 	_CameraDevice.set(CV_CAP_PROP_FPS, FRAMERATE);
@@ -288,7 +290,17 @@ BOOL Disparity::InitCamera(bool GenerateDisparity, bool FilteredDisparityMap)
 	}
 
 	//Mat creation
-	InterleavedFrame.create(ImageSize.height, ImageSize.width, CV_8UC2);
+	LeftFrame.create(ImageSize.height, ImageSize.width, CV_16UC1);
+	RightFrame.create(ImageSize.height, ImageSize.width, CV_16UC1);
+
+//	int numberOfFormats;
+//	_CameraDevice.getFormats(numberOfFormats);
+//	cout << "numberOfFormats:" << numberOfFormats << endl;
+//	for (int i = 0 ; i < numberOfFormats ; i++) {
+//		int width, height, fps;
+//		cv::String formatType;
+//		_CameraDevice.getFormatType(i, &formatType, &width, &height, &fps);
+//	}
 
 	return TRUE;
 }
@@ -297,8 +309,10 @@ BOOL Disparity::InitCamera(bool GenerateDisparity, bool FilteredDisparityMap)
 BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage)
 {
 	//Read the frame from camera
-	//Y16 ==> CV_16UC1 2
+	//Two 10bit images in BGR8 ==> CV_16UC1 2
 	_CameraDevice.read(InputFrame10bit); 
+
+	//cout << "InputFrame10bit size:" << InputFrame10bit.size << " channels:" << InputFrame10bit.channels() << " depth:" << InputFrame10bit.depth() << endl;
 		
 	//Invalid Frame
 	if(InputFrame10bit.empty())
@@ -307,13 +321,39 @@ BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage)
 		return FALSE;
 	}
 	//copy the data to the two channel image
-	InterleavedFrame.data = InputFrame10bit.data;
+	//InterleavedFrame.data = InputFrame10bit.data;
+	//cout << "InterleavedFrame steps:" << InterleavedFrame.step1(0) << ":" << InterleavedFrame.step1(1) << ":" << InterleavedFrame.step1(2) << ":" << endl;
+	for (int Row = 0; Row < InputFrame10bit.rows; Row++)
+	{
+		for (int Col = 0; Col < InputFrame10bit.cols; Col++)
+		{
+			// From docs:
+			// Tara camera also has an option to output the 10-bitmonochrome format.
+			// The format is given as RGB-24 from the camera.
+			// Pixel arrangement:
+			//		Byte 1 -X X X X M1 M0 S1 S0
+			//		Byte 2 -M9 M8 M7 M6 M5 M4 M3 M2
+			//		Byte 3 -S9 S8 S7 S6 S5 S4 S3 S2.
+			cv::Vec<uchar,3> bgr = InputFrame10bit.at<cv::Vec<uchar,3>>(Row, Col);
+			LeftFrame.at<ushort>(Row, Col) = (bgr[1] << 8) + ((bgr[0] & 0x000C) << 4);
+			RightFrame.at<ushort>(Row, Col) = (bgr[2] << 8) + ((bgr[0] & 0x0003) << 6);
+		}
+	}
+
+
+	//cout << "InterleavedFrame size:" << InterleavedFrame.size << " channels:" << InterleavedFrame.channels() << " depth:" << InterleavedFrame.depth() << endl;
+
+//	double frameIndex, min, max;
+//	frameIndex = _CameraDevice.get(CV_CAP_PROP_POS_FRAMES);
+//	cv::minMaxLoc(InputFrame10bit, &min, &max);
+//	cout << "\nFrame Index:" << frameIndex << " min:" << min << " max:" << max << endl;
+	//InterleavedFrame = InterleavedFrame.mul(0.25f);
 			
 	//Splitting the data
-	split(InterleavedFrame, StereoFrames);
+	//split(InputFrame10bit, StereoFrames);
 
 	//Rectify Frames
-	_TaraCamParameters.RemapStereoImage(StereoFrames[0], StereoFrames[1], LeftImage, RightImage);
+	_TaraCamParameters.RemapStereoImage(LeftFrame, RightFrame, LeftImage, RightImage);
 
 	return TRUE;
 }
@@ -974,6 +1014,20 @@ void CameraEnumeration::query_resolution(int deviceid)
 	        v4l2_close(fd);
        		return;
     	}
+
+	//Query formats
+	struct v4l2_fmtdesc frmfmt;
+	frmfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	frmfmt.index = 0;
+
+	cout << " V4L2 Frame Formats:" << endl;
+	while (xioctl(fd, VIDIOC_ENUM_FMT, &frmfmt) >= 0)
+	{
+		cout << '\t' << frmfmt.description << " - flags:" << frmfmt.flags << endl;
+		__u32 pf = frmfmt.pixelformat;
+		cout << "\t\t" << (char)(pf&0xFF) << (char)((pf>>8)&0xFF) << (char)((pf>>16)&0xFF) << (char)((pf>>24)&0xFF) <<endl;
+		frmfmt.index++;
+	}
 
 	//Query framesizes to get the supported resolutions for Y16 format.
 	struct v4l2_frmsizeenum frmsize;

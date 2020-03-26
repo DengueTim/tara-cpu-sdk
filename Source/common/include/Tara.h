@@ -197,8 +197,8 @@ private:
 
 	//Range map to convert to color
 	cv::Mat mRange;
-	std::vector<cv::Mat> StereoFrames;
-	cv::Mat InputFrame10bit, InterleavedFrame;
+	//std::vector<cv::Mat> StereoFrames;
+	cv::Mat InputFrame10bit, LeftFrame, RightFrame;
 
 	//DeviceID to stream the camera
 	int DeviceID;
