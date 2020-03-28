@@ -15,7 +15,7 @@ NC=\033[0m # No Color
 BOLD=\033[1m
 
 #Includes and libs
-CFLAGS=-I $(COMMON_LIBS_PREFIX)/include -I $(OPENCV_INSTALL_PREFIX)/include `pkg-config --cflags glib-2.0`
+CFLAGS=-I $(COMMON_LIBS_PREFIX)/include -I $(OPENCV_INSTALL_PREFIX)/include `pkg-config --cflags glib-2.0` -pthread
 ECON_LIBS=-L $(COMMON_LIBS_PREFIX)/Tara -lecon_tara -L $(COMMON_LIBS_PREFIX)/xunit -lecon_xunit 
 OPENCV_LIBS=-L $(OPENCV_INSTALL_PREFIX)/lib -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_videoio -lopencv_ximgproc -lopencv_imgcodecs
 

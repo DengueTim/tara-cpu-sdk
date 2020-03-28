@@ -27,6 +27,8 @@
 #define DEFAULT_FRAME_WIDTH		640
 #define DEFAULT_FRAME_HEIGHT		480
 
+#define V4L2_FRACT_STREAM(f) f.numerator << '/' << f.denominator
+
 //using namespace cv;
 using namespace std;
 using namespace cv::ximgproc;
@@ -309,7 +311,7 @@ BOOL Disparity::InitCamera(bool GenerateDisparity, bool FilteredDisparityMap)
 BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage)
 {
 	//Read the frame from camera
-	//Two 10bit images in BGR8 ==> CV_16UC1 2
+	//Two 10bit images in BGR8
 	_CameraDevice.read(InputFrame10bit); 
 
 	//cout << "InputFrame10bit size:" << InputFrame10bit.size << " channels:" << InputFrame10bit.channels() << " depth:" << InputFrame10bit.depth() << endl;
@@ -1015,36 +1017,60 @@ void CameraEnumeration::query_resolution(int deviceid)
        		return;
     	}
 
-	//Query formats
-	struct v4l2_fmtdesc frmfmt;
-	frmfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	frmfmt.index = 0;
-
-	cout << " V4L2 Frame Formats:" << endl;
-	while (xioctl(fd, VIDIOC_ENUM_FMT, &frmfmt) >= 0)
-	{
-		cout << '\t' << frmfmt.description << " - flags:" << frmfmt.flags << endl;
-		__u32 pf = frmfmt.pixelformat;
-		cout << "\t\t" << (char)(pf&0xFF) << (char)((pf>>8)&0xFF) << (char)((pf>>16)&0xFF) << (char)((pf>>24)&0xFF) <<endl;
-		frmfmt.index++;
-	}
+//	//Query formats
+//	struct v4l2_fmtdesc frmfmt;
+//	frmfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+//	frmfmt.index = 0;
+//
+//	cout << " V4L2 Frame Formats:" << endl;
+//	while (xioctl(fd, VIDIOC_ENUM_FMT, &frmfmt) >= 0)
+//	{
+//		cout << '\t' << frmfmt.description << " - flags:" << frmfmt.flags << endl;
+//		__u32 pf = frmfmt.pixelformat;
+//		cout << "\t\t" << (char)(pf&0xFF) << (char)((pf>>8)&0xFF) << (char)((pf>>16)&0xFF) << (char)((pf>>24)&0xFF) <<endl;
+//		frmfmt.index++;
+//	}
 
 	//Query framesizes to get the supported resolutions for Y16 format.
 	struct v4l2_frmsizeenum frmsize;
-	frmsize.pixel_format = V4L2_PIX_FMT_Y16;
+	frmsize.pixel_format =  V4L2_PIX_FMT_BGR24; //V4L2_PIX_FMT_Y16;
 	frmsize.index = 0;
+
+//	struct v4l2_frmivalenum frmivalenum;
+//	frmivalenum.pixel_format =  V4L2_PIX_FMT_BGR24;
 	    
 	while (xioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0)
 	{
  		if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE)
 		{
 			CameraResolutions.push_back(cv::Size(frmsize.discrete.width, frmsize.discrete.height));
-       		}
-	        else if (frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE)
-       		{
-		        CameraResolutions.push_back(cv::Size(frmsize.stepwise.max_width, frmsize.stepwise.max_height));
-      		}
-	       frmsize.index++;
+//			frmivalenum.width = frmsize.discrete.width;
+//			frmivalenum.height = frmsize.discrete.height;
+		}
+		else if (frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE)
+		{
+			CameraResolutions.push_back(cv::Size(frmsize.stepwise.max_width, frmsize.stepwise.max_height));
+//			frmivalenum.width = frmsize.stepwise.max_width;
+//			frmivalenum.height = frmsize.stepwise.max_height;
+		}
+
+// 		cout << "Res:" << frmivalenum.width << 'x' << frmivalenum.height << ':' << endl;
+//
+// 		frmivalenum.index = 0;
+//		while (xioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmivalenum) >= 0)
+//		{
+//			if (frmivalenum.type == V4L2_FRMIVAL_TYPE_DISCRETE)
+//			{
+//				cout << '\t' << V4L2_FRACT_STREAM(frmivalenum.discrete) << endl;
+//			}
+//			else if (frmivalenum.type == V4L2_FRMIVAL_TYPE_STEPWISE)
+//			{
+//				cout << '\t' << V4L2_FRACT_STREAM(frmivalenum.stepwise.max) << " to " << V4L2_FRACT_STREAM(frmivalenum.stepwise.max) << " step " << V4L2_FRACT_STREAM(frmivalenum.stepwise.step) << endl;
+//			}
+//			frmivalenum.index++;
+//		}
+
+	    frmsize.index++;
 	}
 	v4l2_close(fd);
 }

@@ -46,7 +46,7 @@
 #include "opencv2/ximgproc/disparity_filter.hpp"
 
 #define SDK_VERSION			"2.0.6"
-#define FRAMERATE 			60
+#define FRAMERATE 			30
 #define MASTERMODE 			1
 #define TRIGGERMODE 			0
 #define IOCTL_RETRY 			4

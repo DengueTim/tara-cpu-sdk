@@ -15,6 +15,10 @@
 #pragma once
 #include "Tara.h"
 
+#include <thread>
+#include <future>
+#include <queue>
+
 class OpenCVViewer
 {
 public:
@@ -24,9 +28,15 @@ public:
 private:
 
 	int ManualExposure;
+	volatile bool SaveFrames = false;
+	std::mutex qMux;
+	std::condition_variable qCond;
+	std::queue<cv::Mat *> queue;
 
 	//OpenCV module to stream the Tara Rectified Images
 	int TaraViewer();
+
+	int FrameWriter(char *SequenceDirectoryBuf);
 
 	//disparity object
 	Tara::Disparity _Disparity;

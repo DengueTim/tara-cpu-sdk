@@ -46,12 +46,50 @@ int OpenCVViewer::Init()
 	return TRUE;
 }
 
+int OpenCVViewer::FrameWriter(char *SequenceDirectoryBuf)
+{
+	char FilenameBuf[240];
+
+	int FrameIndex = 0;
+	timeval tv_start, tv_now;
+
+    while(SaveFrames)
+    {
+        std::unique_lock<std::mutex> lk(qMux);
+        qCond.wait(lk,[&]{return queue.size() >= 2;});
+
+        Mat * LeftImage = queue.front();
+        queue.pop();
+        Mat * RightImage = queue.front();
+        queue.pop();
+
+        lk.unlock();
+
+        if (FrameIndex == 0) {
+           	gettimeofday(&tv_start,NULL);
+        }
+        gettimeofday(&tv_now,NULL);
+
+		int milliseconds = tv_now.tv_sec * 1000 + tv_now.tv_usec / 1000 - tv_start.tv_sec * 1000 - tv_start.tv_usec / 1000;
+		sprintf(FilenameBuf, "%s/%04d_%06d_L.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
+		imwrite(FilenameBuf, *LeftImage);
+		sprintf(FilenameBuf, "%s/%04d_%06d_R.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
+		imwrite(FilenameBuf, *RightImage);
+        //			gettimeofday(&tv3,NULL);
+        //			milliseconds = tv3.tv_sec * 1000 + tv3.tv_usec / 1000 - tv2.tv_sec * 1000 - tv2.tv_usec / 1000;
+        //			cout << "Save frames time:" << milliseconds << endl;
+		FrameIndex++;
+    }
+    return FrameIndex;
+}
+
+
 //Streams using OpenCV Application
 //Converts the 10 bit data to 8 bit data and splits the left an d right image separately
 int OpenCVViewer::TaraViewer()
 {
 	char WaitKeyStatus;
-	Mat LeftImage, RightImage, FullImage;
+	Mat LeftImageA, RightImageA, LeftImageB, RightImageB, FullImage;
 	int BrightnessVal = 4;		//Default Value
 
 	char TimeStampBuf[32];
@@ -63,10 +101,9 @@ int OpenCVViewer::TaraViewer()
 
 	time_t t;
 	tm tm;
-	timeval tv,tv2;
+	timeval tv;
 
-	bool SaveFrames = false;
-	int FrameIndex = 0;
+	std::future<int> frameWriterFuture;
 
 	//Window Creation
 	namedWindow("Input Image", WINDOW_AUTOSIZE);
@@ -83,30 +120,29 @@ int OpenCVViewer::TaraViewer()
 	cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 	string Inputline;
 
+	bool aNotB = false;
 	//Streams the Camera using the OpenCV Video Capture Object
 	while(1)
 	{
+		aNotB = !aNotB;
+
+		Mat &LeftImage = aNotB ? LeftImageA : LeftImageB;
+		Mat &RightImage = aNotB ? RightImageA : RightImageB;
 		if(!_Disparity.GrabFrame(&LeftImage, &RightImage)) //Reads the frame and returns the rectified image
 		{
 			destroyAllWindows();
 			break;
 		}
 
-		//concatenate both the image as single image
-		hconcat(LeftImage, RightImage, FullImage);
-		imshow("Input Image", FullImage);
-
-		if (SaveFrames) {
-			if (FrameIndex == 0) {
-				gettimeofday(&tv,NULL);
-			}
-			gettimeofday(&tv2,NULL);
-			int milliseconds = tv2.tv_sec * 1000 + tv2.tv_usec / 1000 - tv.tv_sec * 1000 - tv.tv_usec / 1000;
-			sprintf(FilenameBuf, "%s/%04d_%06d_L.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
-			imwrite(FilenameBuf, LeftImage);
-			sprintf(FilenameBuf, "%s/%04d_%06d_R.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
-			imwrite(FilenameBuf, RightImage);
-			FrameIndex++;
+		if (!SaveFrames) {
+			//concatenate both the image as single image
+			hconcat(LeftImage, RightImage, FullImage);
+			imshow("Input Image", FullImage);
+		} else {
+			std::lock_guard<std::mutex> lk(qMux);
+			queue.push(&LeftImage);
+			queue.push(&RightImage);
+			qCond.notify_one();
 		}
 
 		//waits for the Key input
@@ -237,7 +273,6 @@ int OpenCVViewer::TaraViewer()
 			SaveFrames = !SaveFrames;
 			if (SaveFrames)
 			{
-				FrameIndex = 0;
 				time(&t);
 				localtime_r(&t, &tm);
 				std::sprintf(SequenceDirectoryBuf, "%s/Sequence_%02d%02d%02d_%02d%02d%02d", cwd, tm.tm_mday, tm.tm_mon + 1, tm.tm_year - 100, tm.tm_hour, tm.tm_min, tm.tm_sec);
@@ -247,10 +282,12 @@ int OpenCVViewer::TaraViewer()
 					cout << "Error creating directory " << SequenceDirectoryBuf << " errno:" << errno << endl;
 					SaveFrames = false;
 				}
+				frameWriterFuture = std::async(std::bind(&OpenCVViewer::FrameWriter, this, SequenceDirectoryBuf));
 			}
 			else
 			{
-				cout << "Last frame index:" << FrameIndex << endl;
+				int lastFrameIndex = frameWriterFuture.get();
+				cout << "Last frame index:" << lastFrameIndex << endl;
 			}
 		}
 	}
