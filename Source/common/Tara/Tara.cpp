@@ -308,11 +308,14 @@ BOOL Disparity::InitCamera(bool GenerateDisparity, bool FilteredDisparityMap)
 }
 
 //Grabs the frame, converts it to 8 bit, splits the left and right frame and returns the rectified frame
-BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage)
+BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *timeVal)
 {
 	//Read the frame from camera
 	//Two 10bit images in BGR8
-	_CameraDevice.read(InputFrame10bit); 
+	_CameraDevice.read(InputFrame10bit);
+	if (timeVal) {
+		gettimeofday(timeVal, NULL);
+	}
 
 	//cout << "InputFrame10bit size:" << InputFrame10bit.size << " channels:" << InputFrame10bit.channels() << " depth:" << InputFrame10bit.depth() << endl;
 		

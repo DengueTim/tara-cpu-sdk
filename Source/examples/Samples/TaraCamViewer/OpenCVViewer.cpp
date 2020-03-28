@@ -127,7 +127,7 @@ int OpenCVViewer::TaraViewer()
 		frameQueueStructsIndex = frameQueueStructsIndex++ % 4;
 		FrameQueueStruct *fqs = &(frameQueueStructs[frameQueueStructsIndex]);
 
-		if(!_Disparity.GrabFrame(&(fqs->left), &(fqs->right))) //Reads the frame and returns the rectified image
+		if(!_Disparity.GrabFrame(&(fqs->left), &(fqs->right), &(fqs->timeVal))) //Reads the frame and returns the rectified image
 		{
 			destroyAllWindows();
 			break;
@@ -138,7 +138,6 @@ int OpenCVViewer::TaraViewer()
 			hconcat(fqs->left, fqs->right, FullImage);
 			imshow("Input Image", FullImage);
 		} else {
-			gettimeofday(&(fqs->timeVal), NULL);
 			std::lock_guard<std::mutex> lk(qMux);
 			queue.push(fqs);
 			qCond.notify_one();
