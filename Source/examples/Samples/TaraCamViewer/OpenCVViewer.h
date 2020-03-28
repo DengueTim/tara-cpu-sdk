@@ -26,12 +26,17 @@ public:
 	int Init();
 
 private:
+	struct FrameQueueStruct {
+		timeval timeVal;
+		cv::Mat left;
+		cv::Mat right;
+	};
 
 	int ManualExposure;
 	volatile bool SaveFrames = false;
 	std::mutex qMux;
 	std::condition_variable qCond;
-	std::queue<cv::Mat *> queue;
+	std::queue<FrameQueueStruct *> queue;
 
 	//OpenCV module to stream the Tara Rectified Images
 	int TaraViewer();

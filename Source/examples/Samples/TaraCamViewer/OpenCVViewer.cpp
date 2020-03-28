@@ -51,30 +51,28 @@ int OpenCVViewer::FrameWriter(char *SequenceDirectoryBuf)
 	char FilenameBuf[240];
 
 	int FrameIndex = 0;
-	timeval tv_start, tv_now;
+	timeval timeval_start;
 
     while(SaveFrames)
     {
         std::unique_lock<std::mutex> lk(qMux);
-        qCond.wait(lk,[&]{return queue.size() >= 2;});
+        qCond.wait(lk,[&]{return !queue.empty();});
 
-        Mat * LeftImage = queue.front();
-        queue.pop();
-        Mat * RightImage = queue.front();
+        FrameQueueStruct *fqs = queue.front();
         queue.pop();
 
         lk.unlock();
 
         if (FrameIndex == 0) {
-           	gettimeofday(&tv_start,NULL);
+           	std::memcpy(&timeval_start, &(fqs->timeVal), sizeof(timeval));
         }
-        gettimeofday(&tv_now,NULL);
 
-		int milliseconds = tv_now.tv_sec * 1000 + tv_now.tv_usec / 1000 - tv_start.tv_sec * 1000 - tv_start.tv_usec / 1000;
+		int milliseconds = fqs->timeVal.tv_sec * 1000 + fqs->timeVal.tv_usec / 1000 - timeval_start.tv_sec * 1000 - timeval_start.tv_usec / 1000;
 		sprintf(FilenameBuf, "%s/%04d_%06d_L.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
-		imwrite(FilenameBuf, *LeftImage);
-		sprintf(FilenameBuf, "%s/%04d_%06d_R.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
-		imwrite(FilenameBuf, *RightImage);
+		imwrite(FilenameBuf, fqs->left);
+		*strrchr(FilenameBuf, 'L') = 'R';
+		//sprintf(FilenameBuf, "%s/%04d_%06d_R.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
+		imwrite(FilenameBuf, fqs->right);
         //			gettimeofday(&tv3,NULL);
         //			milliseconds = tv3.tv_sec * 1000 + tv3.tv_usec / 1000 - tv2.tv_sec * 1000 - tv2.tv_usec / 1000;
         //			cout << "Save frames time:" << milliseconds << endl;
@@ -89,8 +87,11 @@ int OpenCVViewer::FrameWriter(char *SequenceDirectoryBuf)
 int OpenCVViewer::TaraViewer()
 {
 	char WaitKeyStatus;
-	Mat LeftImageA, RightImageA, LeftImageB, RightImageB, FullImage;
+	Mat FullImage;
 	int BrightnessVal = 4;		//Default Value
+
+	FrameQueueStruct frameQueueStructs[4];
+	int frameQueueStructsIndex = 0;
 
 	char TimeStampBuf[32];
 	char FilenameBuf[240];
@@ -120,15 +121,13 @@ int OpenCVViewer::TaraViewer()
 	cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 	string Inputline;
 
-	bool aNotB = false;
 	//Streams the Camera using the OpenCV Video Capture Object
 	while(1)
 	{
-		aNotB = !aNotB;
+		frameQueueStructsIndex = frameQueueStructsIndex++ % 4;
+		FrameQueueStruct *fqs = &(frameQueueStructs[frameQueueStructsIndex]);
 
-		Mat &LeftImage = aNotB ? LeftImageA : LeftImageB;
-		Mat &RightImage = aNotB ? RightImageA : RightImageB;
-		if(!_Disparity.GrabFrame(&LeftImage, &RightImage)) //Reads the frame and returns the rectified image
+		if(!_Disparity.GrabFrame(&(fqs->left), &(fqs->right))) //Reads the frame and returns the rectified image
 		{
 			destroyAllWindows();
 			break;
@@ -136,12 +135,12 @@ int OpenCVViewer::TaraViewer()
 
 		if (!SaveFrames) {
 			//concatenate both the image as single image
-			hconcat(LeftImage, RightImage, FullImage);
+			hconcat(fqs->left, fqs->right, FullImage);
 			imshow("Input Image", FullImage);
 		} else {
+			gettimeofday(&(fqs->timeVal), NULL);
 			std::lock_guard<std::mutex> lk(qMux);
-			queue.push(&LeftImage);
-			queue.push(&RightImage);
+			queue.push(fqs);
 			qCond.notify_one();
 		}
 
@@ -264,9 +263,9 @@ int OpenCVViewer::TaraViewer()
 			std::sprintf(TimeStampBuf, "%02d%02d%02d_%02d%02d%02d_%04d", tm.tm_mday, tm.tm_mon + 1, tm.tm_year - 100, tm.tm_hour, tm.tm_min, tm.tm_sec, millisecs);
 			cout << "Writing left and right images with time stamp:" << TimeStampBuf << endl;
 			std::sprintf(FilenameBuf, "%s/L_%s.png", cwd, TimeStampBuf);
-			imwrite(FilenameBuf, LeftImage);
+			imwrite(FilenameBuf, fqs->left);
 			std::sprintf(FilenameBuf, "%s/R_%s.png", cwd, TimeStampBuf);
-			imwrite(FilenameBuf, RightImage);
+			imwrite(FilenameBuf, fqs->right);
 		}
 		else if(WaitKeyStatus == 'v' || WaitKeyStatus == 'V') // Toggle saving frames
 		{
