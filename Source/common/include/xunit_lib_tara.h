@@ -64,6 +64,7 @@ typedef struct {
 	double gyroX;
 	double gyroY;
 	double gyroZ;
+	timeval timeVal;
 } IMUDATAOUTPUT_TypeDef;
 
 /* Report Numbers */

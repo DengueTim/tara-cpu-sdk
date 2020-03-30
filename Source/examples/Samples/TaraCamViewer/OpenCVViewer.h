@@ -18,6 +18,7 @@
 #include <thread>
 #include <future>
 #include <queue>
+#include <pthread.h>
 
 class OpenCVViewer
 {
@@ -33,15 +34,22 @@ private:
 	};
 
 	int ManualExposure;
+	TaraRev g_eRev;
 	volatile bool SaveFrames = false;
-	std::mutex qMux;
-	std::condition_variable qCond;
-	std::queue<FrameQueueStruct *> queue;
+	volatile bool SaveIMU = true;
+	std::mutex frameQueueMux;
+	std::condition_variable frameQueueCond;
+	std::queue<FrameQueueStruct *> frameQueue;
+
+	IMUDATAOUTPUT_TypeDef *imuOutputBuffer;
 
 	//OpenCV module to stream the Tara Rectified Images
 	int TaraViewer();
 
 	int FrameWriter(char *SequenceDirectoryBuf);
+	int imuWriter(char *SequenceDirectoryBuf, pthread_mutex_t *imuDataReadyMux);
+
+	void GetImuValueThread();
 
 	//disparity object
 	Tara::Disparity _Disparity;

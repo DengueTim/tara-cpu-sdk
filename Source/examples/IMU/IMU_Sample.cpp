@@ -324,22 +324,22 @@ int kbhit(void)
 }
 
 /* To set idle for specified time */
-void Sleep(unsigned int TimeInMilli)
-{
-	BOOL timeout = TRUE;
-	unsigned int start, end = 0;
-
-	start = GetTickCount();
-	while(timeout)
-	{
-		end = GetTickCount();
-		if(end - start > TimeInMilli)
-		{
-			timeout = FALSE;
-		}
-	}
-	return;
-}
+//void Sleep(unsigned int TimeInMilli)
+//{
+//	BOOL timeout = TRUE;
+//	unsigned int start, end = 0;
+//
+//	start = GetTickCount();
+//	while(timeout)
+//	{
+//		end = GetTickCount();
+//		if(end - start > TimeInMilli)
+//		{
+//			timeout = FALSE;
+//		}
+//	}
+//	return;
+//}
 
 /* Killing the thread */
 void KillThread(int sig)
@@ -521,7 +521,7 @@ int IMU_Sample::Init()
 	for(;(!kbhit() && (glIMUInput.IMU_UPDATE_MODE != IMU_CONT_UPDT_DIS));)
 	{
 		updateCircles();
-		Sleep(1);
+		usleep(50000); // ~20 updates per second.
 	}
 
 	cout << "Keyboard hitted\n";
