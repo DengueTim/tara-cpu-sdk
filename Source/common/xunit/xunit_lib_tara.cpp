@@ -1085,8 +1085,9 @@ BOOL GetIMUValueBuffer(pthread_mutex_t *IMUDataReadyEvent, IMUDATAOUTPUT_TypeDef
 	IMUDATAOUTPUT_TypeDef *lIMUAxesInitAdd = lIMUAxes;
 
 	fd_set fds;
-	timespec selectTs = {0, 100000000};
+	timespec selectTs = {0, 250000000}; // 250ms
 	timeval sampleTv;
+	bool firstLoop = true;
 
 	if(glIMUConfig.IMU_MODE == IMU_ACC_GYRO_DISABLE)
 	{
@@ -1108,8 +1109,9 @@ BOOL GetIMUValueBuffer(pthread_mutex_t *IMUDataReadyEvent, IMUDATAOUTPUT_TypeDef
 	}
 
 	/* Read the status from the device */
-	while (glIMUInput.IMU_UPDATE_MODE == IMU_CONT_UPDT_EN)
+	while (glIMUInput.IMU_UPDATE_MODE == IMU_CONT_UPDT_EN || firstLoop)
 	{
+		firstLoop = false;
 		FD_ZERO(&fds);
 		FD_SET(hid_imu, &fds);
 		int i = pselect(hid_imu + 1, &fds, NULL, NULL, &selectTs, NULL);
