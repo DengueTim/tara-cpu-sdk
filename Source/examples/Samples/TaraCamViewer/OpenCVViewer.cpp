@@ -94,14 +94,6 @@ int OpenCVViewer::Init()
 		return FALSE;
 	}
 
-	imuOutputBuffer = (IMUDATAOUTPUT_TypeDef*)malloc(IMU_AXES_VALUES_MAX * sizeof(IMUDATAOUTPUT_TypeDef));
-	if(imuOutputBuffer == NULL)
-	{
-		cout << "Memory Allocation for output failed\n";
-		return FALSE;
-	}
-	imuOutputBuffer->IMU_VALUE_ID = 0;
-
 	//Streams the camera and process the height
 	TaraViewer();
 
@@ -136,13 +128,10 @@ int OpenCVViewer::FrameWriter(char *SequenceDirectoryBuf)
 		imwrite(FilenameBuf, fqs->right);
         FrameIndex++;
     }
-    return FrameIndex;
+    return FrameIndex - 1;
 }
 
 int OpenCVViewer::imuWriter(char *SequenceDirectoryBuf, pthread_mutex_t *imuDataReadyMux) {
-	int sampleIndex = 0;
-	timeval timeval_start;
-
 	char FilenameBuf[240];
 	sprintf(FilenameBuf, "%s/IMU.txt", SequenceDirectoryBuf);
 
@@ -152,36 +141,29 @@ int OpenCVViewer::imuWriter(char *SequenceDirectoryBuf, pthread_mutex_t *imuData
 		return -1;
 	}
 
-	IMUDATAOUTPUT_TypeDef *imuOutput = imuOutputBuffer;
+	IMUDATAOUTPUT_TypeDef *imuSample = NULL;
 
 	while (saveFramesAndIMU) {
-		pthread_mutex_lock(imuDataReadyMux);
+		std::unique_lock<std::mutex> lk(imuQueueMux);
+		imuQueueCond.wait(lk,[&]{return !imuQueue.empty();});
+		imuSample = imuQueue.front();
+		imuQueue.pop();
+		lk.unlock();
 
-		if (sampleIndex == 0) {
-			std::memcpy(&timeval_start, &(imuOutput->timeVal), sizeof(timeval));
-		}
-		int milliseconds = imuOutput->timeVal.tv_sec * 1000 + imuOutput->timeVal.tv_usec / 1000 - timeval_start.tv_sec * 1000 - timeval_start.tv_usec / 1000;
-
-		fprintf(imuFile, "%06d:%f\t%f\t%f\t\t%f\t%f\t%f\n",
-				milliseconds,
-				imuOutput->accX,
-				imuOutput->accY,
-				imuOutput->accZ,
-				imuOutput->gyroX,
-				imuOutput->gyroY,
-				imuOutput->gyroZ);
-
-		if(imuOutput->IMU_VALUE_ID < IMU_AXES_VALUES_MAX) {
-			imuOutput++;
-		} else {
-			imuOutput = imuOutputBuffer;
-		}
-		sampleIndex++;
+		fprintf(imuFile, "%06d-%06d:%f\t%f\t%f\t\t%f\t%f\t%f\n",
+				imuSample->imuSampleIndex,
+				imuSample->millisecond,
+				imuSample->accX,
+				imuSample->accY,
+				imuSample->accZ,
+				imuSample->gyroX,
+				imuSample->gyroY,
+				imuSample->gyroZ);
 	}
 	fflush(imuFile);
 	fclose(imuFile);
 
-	return sampleIndex;
+	return imuSample ? imuSample->imuSampleIndex : 0;
 }
 
 //Streams using OpenCV Application
@@ -218,8 +200,6 @@ int OpenCVViewer::TaraViewer()
 
 	auto stopSavingFramesAndIMU = [&]() {
 		saveFramesAndIMU = false;
-
-		pthread_mutex_unlock(&imuDataReadyMux);
 
 		cout << "Last frame index:" << frameWriterFuture.get() << endl;
 		cout << "Last IMU sample index:" << imuWriterFuture.get() << endl;
@@ -279,9 +259,9 @@ int OpenCVViewer::TaraViewer()
 		}
 
 		if (frameQueueSize >= (numberOfFrameQueueStructs * 3) / 4) {
-			cout << "frameQueue 3/4 full!! Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
+			cout << "frameQueue 3/4 full! Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
 		} else if (frameQueueSize >= numberOfFrameQueueStructs) {
-			cout << "frameQueue overflow. Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
+			cout << "frameQueue overflow!! Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
 			return FALSE;
 		}
 
@@ -427,7 +407,7 @@ int OpenCVViewer::TaraViewer()
 				}
 				frameWriterFuture = std::async(std::bind(&OpenCVViewer::FrameWriter, this, SequenceDirectoryBuf));
 
-				imuReaderFuture = std::async(&GetIMUValueBuffer, &imuDataReadyMux, imuOutputBuffer);
+				imuReaderFuture = std::async(&GetIMUValueBuffer, &imuQueueMux, &imuQueueCond, &imuQueue);
 				//Configuring IMU update mode
 				IMUDATAINPUT_TypeDef imuInput = {IMU_CONT_UPDT_EN, IMU_AXES_VALUES_MIN};
 				if(!ControlIMUCapture(&imuInput)) {

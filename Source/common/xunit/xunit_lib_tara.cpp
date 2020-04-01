@@ -1079,13 +1079,15 @@ BOOL ControlIMUCapture(IMUDATAINPUT_TypeDef *lIMUInput)
  *  Description	:   	Sends the extension unit command to get the axis values from the IMU.  *
   **********************************************************************************************************
 */
-BOOL GetIMUValueBuffer(pthread_mutex_t *IMUDataReadyEvent, IMUDATAOUTPUT_TypeDef *lIMUAxes)
+BOOL GetIMUValueBuffer(std::mutex *imuQueueMux, std::condition_variable *imuQueueCond, std::queue<IMUDATAOUTPUT_TypeDef *> *imuQueue)
 {
-	UINT16 lIDofValues = 0;
-	IMUDATAOUTPUT_TypeDef *lIMUAxesInitAdd = lIMUAxes;
+	const int sampleBufferSize = 1024;
+	IMUDATAOUTPUT_TypeDef sampleBuffer[sampleBufferSize];
+	u_int32_t sampleIndex = 0;
 
 	fd_set fds;
 	timespec selectTs = {0, 250000000}; // 250ms
+	timeval startTv;
 	timeval sampleTv;
 	bool firstLoop = true;
 
@@ -1128,55 +1130,55 @@ BOOL GetIMUValueBuffer(pthread_mutex_t *IMUDataReadyEvent, IMUDATAOUTPUT_TypeDef
 			return FALSE;
 		}
 
+		if (sampleIndex == 0) {
+			startTv = sampleTv;
+		}
+
 		//printf("%s(): read %d bytes:\n", __func__,ret);
 		if(g_in_packet_buf[0] == CAMERA_CONTROL_STEREO && g_in_packet_buf[1] == SEND_IMU_VAL_BUFF) {
 			if(g_in_packet_buf[48] == SET_SUCCESS) {
 
-				lIMUAxes->IMU_VALUE_ID = ++lIDofValues;
+				IMUDATAOUTPUT_TypeDef *sample = &sampleBuffer[sampleIndex % sampleBufferSize];
+				sample->imuSampleIndex = sampleIndex;
+
 
 				if(g_in_packet_buf[4] == IMU_ACC_VAL)
 				{
-					lIMUAxes->accX = (((INT16)((g_in_packet_buf[6]) | (g_in_packet_buf[5]<<8))) * glAccSensMult);
-					lIMUAxes->accY = (((INT16)((g_in_packet_buf[8]) | (g_in_packet_buf[7]<<8))) * glAccSensMult);
-					lIMUAxes->accZ = (((INT16)((g_in_packet_buf[10]) | (g_in_packet_buf[9]<<8))) * glAccSensMult);
+					sample->accX = (((INT16)((g_in_packet_buf[6]) | (g_in_packet_buf[5]<<8))) * glAccSensMult);
+					sample->accY = (((INT16)((g_in_packet_buf[8]) | (g_in_packet_buf[7]<<8))) * glAccSensMult);
+					sample->accZ = (((INT16)((g_in_packet_buf[10]) | (g_in_packet_buf[9]<<8))) * glAccSensMult);
 				}
 
 				if(g_in_packet_buf[15] == IMU_GYRO_VAL)
 				{
-					lIMUAxes->gyroX = (((INT16)((g_in_packet_buf[17]) | (g_in_packet_buf[16]<<8))) * glGyroSensMult);
-					lIMUAxes->gyroY = (((INT16)((g_in_packet_buf[19]) | (g_in_packet_buf[18]<<8))) * glGyroSensMult);
-					lIMUAxes->gyroZ = (((INT16)((g_in_packet_buf[21]) | (g_in_packet_buf[20]<<8))) * glGyroSensMult);
+					sample->gyroX = (((INT16)((g_in_packet_buf[17]) | (g_in_packet_buf[16]<<8))) * glGyroSensMult);
+					sample->gyroY = (((INT16)((g_in_packet_buf[19]) | (g_in_packet_buf[18]<<8))) * glGyroSensMult);
+					sample->gyroZ = (((INT16)((g_in_packet_buf[21]) | (g_in_packet_buf[20]<<8))) * glGyroSensMult);
 				}
 
-				lIMUAxes->timeVal = sampleTv;
+				sample->millisecond = sampleTv.tv_sec * 1000 + sampleTv.tv_usec / 1000 - startTv.tv_sec * 1000 - startTv.tv_usec / 1000;
 
-				if(glIMUInput.IMU_UPDATE_MODE == IMU_CONT_UPDT_EN)
+				int imuQueueSize;
 				{
-					if(lIMUAxes->IMU_VALUE_ID == IMU_AXES_VALUES_MAX)
-					{
-						lIMUAxes = lIMUAxesInitAdd;
-						lIDofValues = 0;
-					}
-					else
-						lIMUAxes++;
-				}
-				else
-				{
-					glIMUInput.IMU_NUM_OF_VALUES--;
-					lIMUAxes++;
+					std::lock_guard<std::mutex> lk(*imuQueueMux);
+					imuQueue->push(sample);
+					imuQueueSize = imuQueue->size();
+					imuQueueCond->notify_one();
 				}
 
-				//Setting the event to tell the application the buffer is full.
-				pthread_mutex_unlock(IMUDataReadyEvent);
+				if (imuQueueSize >= (sampleBufferSize * 3) / 4) {
+					printf("imuQueue 3/4 full! Queue size:%d sampleBufferSize:%d\n", imuQueueSize, sampleBufferSize);
+				} else if (imuQueueSize >= sampleBufferSize) {
+					printf("imuQueue overflow!! Queue size:%d sampleBufferSize:%d\n", imuQueueSize, sampleBufferSize);
+					return FALSE;
+				}
+
+				sampleIndex++;
 			} else if(g_in_packet_buf[48] == SET_FAIL) {
 				return FALSE;
 			}
 		}
 	}
-
-	lIMUAxes--;
-	glIMUInput.IMU_NUM_OF_VALUES = lIMUAxes->IMU_VALUE_ID ;
-	lIMUAxes++;
 
 	return TRUE;
 }

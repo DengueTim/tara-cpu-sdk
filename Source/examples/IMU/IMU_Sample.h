@@ -18,8 +18,6 @@
 #pragma once
 #include "Tara.h"
 #include <math.h>
-#include <pthread.h>
-#include <signal.h>
 
 #define		M_PI				3.14159265358979323846
 #define		HALF_PI				(M_PI / 2)
@@ -59,7 +57,9 @@ private:
 
 IMUDATAINPUT_TypeDef			glIMUInput;
 BOOL						    glIMUAbortThread;
-pthread_mutex_t				    IMUDataReadyEvent;
+std::mutex imuQueueMux;
+std::condition_variable imuQueueCond;
+std::queue<IMUDATAOUTPUT_TypeDef *> imuQueue;
 
 //Pthread call routine
 void*	GetIMUValueThread(void *lpParameter);

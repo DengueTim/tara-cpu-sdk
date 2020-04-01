@@ -17,6 +17,8 @@
  IMU Sample: A sample app for displaying the IMU data.
 **********************************************************************/
 #include "IMU_Sample.h"
+#include <pthread.h>
+#include <signal.h>
 
 using namespace cv;
 using namespace std;
@@ -354,7 +356,7 @@ void* GetIMUValueThread(void *lpParameter)
 	signal(SIGUSR1, KillThread);
 
 	//HID command
-	if(GetIMUValueBuffer(&IMUDataReadyEvent , lIMUOutput))
+	if(GetIMUValueBuffer(&imuQueueMux, &imuQueueCond, &imuQueue))
 	{
 		cout << "GetIMUValueBuffer success\n";
 	}
@@ -369,28 +371,22 @@ void* GetIMUValueThread(void *lpParameter)
 /* UpdateIMUValue Thread uses the values from the GetIMUValue everytime when the semaphore is set */
 void* UpdateIMUValueThread(void *lpParameter)
 {
-	IMUDATAOUTPUT_TypeDef *lIMUOutputAdd, *lIMUOutput = NULL;
-	lIMUOutputAdd = lIMUOutput = (IMUDATAOUTPUT_TypeDef*)(lpParameter);
 	signal(SIGUSR1, KillThread);
 
 	//Blocking call waits for unlock event
-	for( ;((glIMUAbortThread == FALSE)  && ((glIMUInput.IMU_UPDATE_MODE == IMU_CONT_UPDT_EN) ||
-		(lIMUOutput->IMU_VALUE_ID <= glIMUInput.IMU_NUM_OF_VALUES))) ; )
+	while((glIMUAbortThread == FALSE))
+//	&& ((glIMUInput.IMU_UPDATE_MODE == IMU_CONT_UPDT_EN) ||
+//		(lIMUOutput->IMU_VALUE_ID <= glIMUInput.IMU_NUM_OF_VALUES))) ; )
 	{
-		if(glIMUInput.IMU_UPDATE_MODE != IMU_CONT_UPDT_DIS)
-		{
-
-			pthread_mutex_lock(&IMUDataReadyEvent);
-		}
+		std::unique_lock<std::mutex> lk(imuQueueMux);
+		imuQueueCond.wait(lk,[&]{return !imuQueue.empty();});
+		IMUDATAOUTPUT_TypeDef *lIMUOutput = imuQueue.front();
+		imuQueue.pop();
+		lk.unlock();
 
 		//Calculating angles based on the current raw values from IMU
 		IMU_SampleObj.getInclination(lIMUOutput->gyroX, lIMUOutput->gyroY, lIMUOutput->gyroZ,
 				                     lIMUOutput->accX, lIMUOutput->accY, lIMUOutput->accZ);
-		//Round robin mechanism to use the same buffer
-		if(lIMUOutput->IMU_VALUE_ID < IMU_AXES_VALUES_MAX)
-			lIMUOutput++;
-		else
-			lIMUOutput = lIMUOutputAdd;
 	}
 	return NULL;
 }
@@ -498,12 +494,7 @@ int IMU_Sample::Init()
 		return FALSE;
 	}
 
-	lIMUOutput->IMU_VALUE_ID = 0;
 	cout << "\nHit Enter key to stop\n";
-
-	//Mutex initialization
-	pthread_mutex_init(&IMUDataReadyEvent, NULL);
-	pthread_mutex_lock(&IMUDataReadyEvent);
 
 	//Thread creation
 	if(pthread_create(&thread1, NULL, GetIMUValueThread, (void*) lIMUOutput) != 0)
@@ -540,7 +531,6 @@ int IMU_Sample::Init()
 	//Releasing the threads and mutex
 	pthread_kill(thread1, SIGUSR1);
 	pthread_kill(thread2, SIGUSR1);
-	pthread_mutex_destroy(&IMUDataReadyEvent);
 	glIMUAbortThread = FALSE;
 
 	//Freeing the memory

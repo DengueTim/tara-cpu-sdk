@@ -22,7 +22,9 @@
 
 #include <stdbool.h>
 #include <libudev.h>
-#include <pthread.h>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
 
 #define VID			"2560"
 #define See3CAM_STEREO		"c114"
@@ -57,14 +59,14 @@ enum TaraRev
 };
 
 typedef struct {
-	UINT16 IMU_VALUE_ID;
+	u_int32_t imuSampleIndex;
 	double accX;
 	double accY;
 	double accZ;
 	double gyroX;
 	double gyroY;
 	double gyroZ;
-	timeval timeVal;
+	u_int32_t millisecond;
 } IMUDATAOUTPUT_TypeDef;
 
 /* Report Numbers */
@@ -201,7 +203,7 @@ BOOL SetIMUConfig (IMUCONFIG_TypeDef lIMUConfig);		//Sets the IMU configuration
 
 BOOL ControlIMUCapture (IMUDATAINPUT_TypeDef *lIMUInput);	//Configures the IMU to read the IMU data in a specific format
 
-BOOL GetIMUValueBuffer (pthread_mutex_t *lIMUDataReadyEvent, IMUDATAOUTPUT_TypeDef *lIMUAxes);	
+BOOL GetIMUValueBuffer (std::mutex *imuQueueMuxx, std::condition_variable *imuQueueCond, std::queue<IMUDATAOUTPUT_TypeDef *> *imuQueue);
 								//Reads the IMU values
 
 BOOL StereoCalibRead (unsigned char **IntrinsicBuffer, unsigned char **ExtrinsicBuffer, int *lIntFileLength, int *lExtFileLength);

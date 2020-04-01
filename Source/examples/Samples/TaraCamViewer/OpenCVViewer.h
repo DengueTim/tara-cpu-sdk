@@ -18,7 +18,6 @@
 #include <thread>
 #include <future>
 #include <queue>
-#include <pthread.h>
 
 class OpenCVViewer
 {
@@ -40,7 +39,9 @@ private:
 	std::condition_variable frameQueueCond;
 	std::queue<FrameQueueStruct *> frameQueue;
 
-	IMUDATAOUTPUT_TypeDef *imuOutputBuffer;
+	std::mutex imuQueueMux;
+	std::condition_variable imuQueueCond;
+	std::queue<IMUDATAOUTPUT_TypeDef *> imuQueue;
 
 	//OpenCV module to stream the Tara Rectified Images
 	int TaraViewer();
