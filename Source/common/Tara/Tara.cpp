@@ -328,10 +328,10 @@ BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *time
 	//copy the data to the two channel image
 	//InterleavedFrame.data = InputFrame10bit.data;
 	//cout << "InterleavedFrame steps:" << InterleavedFrame.step1(0) << ":" << InterleavedFrame.step1(1) << ":" << InterleavedFrame.step1(2) << ":" << endl;
-	for (int Row = 0; Row < InputFrame10bit.rows; Row++)
-	{
-		for (int Col = 0; Col < InputFrame10bit.cols; Col++)
-		{
+//	for (int row = 0; row < InputFrame10bit.rows; row++)
+//	{
+//		for (int col = 0; col < InputFrame10bit.cols; col++)
+//		{
 			// From docs:
 			// Tara camera also has an option to output the 10-bitmonochrome format.
 			// The format is given as RGB-24 from the camera.
@@ -339,10 +339,21 @@ BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *time
 			//		Byte 1 -X X X X M1 M0 S1 S0
 			//		Byte 2 -M9 M8 M7 M6 M5 M4 M3 M2
 			//		Byte 3 -S9 S8 S7 S6 S5 S4 S3 S2.
-			cv::Vec<uchar,3> bgr = InputFrame10bit.at<cv::Vec<uchar,3>>(Row, Col);
-			LeftFrame.at<ushort>(Row, Col) = (bgr[1] << 8) + ((bgr[0] & 0x000C) << 4);
-			RightFrame.at<ushort>(Row, Col) = (bgr[2] << 8) + ((bgr[0] & 0x0003) << 6);
-		}
+//			cv::Vec<uchar,3> bgr = InputFrame10bit.at<cv::Vec<uchar,3>>(row, col);
+//			LeftFrame.at<ushort>(row, col) = (bgr[1] << 8) + ((bgr[0] & 0x000C) << 4);
+//			RightFrame.at<ushort>(row, col) = (bgr[2] << 8) + ((bgr[0] & 0x0003) << 6);
+//		}
+//	}
+
+	// Does the same as above but faster.
+	for (int i = 0; i < (InputFrame10bit.rows * InputFrame10bit.cols); i++) {
+		uchar *bgr = InputFrame10bit.data + i * InputFrame10bit.step.p[1];
+		uchar *leftY16 = LeftFrame.data + i * LeftFrame.step.p[1];
+		leftY16[1] = bgr[1];
+		leftY16[0] = (bgr[0] & 0x0C) << 4;
+		uchar *rightY16 = RightFrame.data + i * RightFrame.step.p[1];
+		rightY16[1] = bgr[2];
+		rightY16[0] = (bgr[0] & 0x03) << 6;
 	}
 
 

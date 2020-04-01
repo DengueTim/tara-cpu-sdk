@@ -1108,7 +1108,7 @@ BOOL GetIMUValueBuffer(pthread_mutex_t *IMUDataReadyEvent, IMUDATAOUTPUT_TypeDef
 	}
 
 	/* Read the status from the device */
-	while (glIMUInput.IMU_UPDATE_MODE != IMU_CONT_UPDT_DIS || glIMUInput.IMU_NUM_OF_VALUES >= IMU_AXES_VALUES_MIN)
+	while (glIMUInput.IMU_UPDATE_MODE == IMU_CONT_UPDT_EN)
 	{
 		FD_ZERO(&fds);
 		FD_SET(hid_imu, &fds);

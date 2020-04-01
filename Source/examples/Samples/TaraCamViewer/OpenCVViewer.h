@@ -35,8 +35,7 @@ private:
 
 	int ManualExposure;
 	TaraRev g_eRev;
-	volatile bool SaveFrames = false;
-	volatile bool SaveIMU = true;
+	volatile bool saveFramesAndIMU = false;
 	std::mutex frameQueueMux;
 	std::condition_variable frameQueueCond;
 	std::queue<FrameQueueStruct *> frameQueue;

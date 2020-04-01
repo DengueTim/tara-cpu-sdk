@@ -39,6 +39,8 @@ int OpenCVViewer::Init()
 		return FALSE;
 	}
 
+	_Disparity.SetAutoExposure();
+
 	if(!GetRevision(&g_eRev)) {
 		printf("Init GetRevision Failed");
 		return FALSE;
@@ -92,44 +94,13 @@ int OpenCVViewer::Init()
 		return FALSE;
 	}
 
-	//Configuring IMU update mode
-	IMUDATAINPUT_TypeDef imuInput = {IMU_CONT_UPDT_EN, IMU_AXES_VALUES_MIN};
-
-	//Setting the IMU update mode using HID command
-	uStatus = ControlIMUCapture(&imuInput);
-	if(uStatus == FALSE) {
-		cout << "ControlIMUCapture Failed\n";
-		return FALSE;
-	}
-//	else {
-//		glIMUInput = imuInput;
-//	}
-
-	//Getting the IMU values
-	cout << "\nGetting IMU Value buffer\n";
-	IMUDATAOUTPUT_TypeDef *lIMUOutput = NULL;
-	pthread_t thread1, thread2;
-
-	//Allocating buffers for IMU output structures
-	if(imuInput.IMU_UPDATE_MODE == IMU_CONT_UPDT_EN)
-	{
-		lIMUOutput = (IMUDATAOUTPUT_TypeDef*)malloc(IMU_AXES_VALUES_MAX * sizeof(IMUDATAOUTPUT_TypeDef));
-	}
-	else
-	{
-		lIMUOutput = (IMUDATAOUTPUT_TypeDef*)malloc(1 * sizeof(IMUDATAOUTPUT_TypeDef));
-	}
-
-	//Memory validation
-	if(lIMUOutput == NULL)
+	imuOutputBuffer = (IMUDATAOUTPUT_TypeDef*)malloc(IMU_AXES_VALUES_MAX * sizeof(IMUDATAOUTPUT_TypeDef));
+	if(imuOutputBuffer == NULL)
 	{
 		cout << "Memory Allocation for output failed\n";
 		return FALSE;
 	}
-
-	lIMUOutput->IMU_VALUE_ID = 0;
-
-	imuOutputBuffer = lIMUOutput;
+	imuOutputBuffer->IMU_VALUE_ID = 0;
 
 	//Streams the camera and process the height
 	TaraViewer();
@@ -144,7 +115,7 @@ int OpenCVViewer::FrameWriter(char *SequenceDirectoryBuf)
 	int FrameIndex = 0;
 	timeval timeval_start;
 
-    while(SaveFrames)
+    while(saveFramesAndIMU)
     {
         std::unique_lock<std::mutex> lk(frameQueueMux);
         frameQueueCond.wait(lk,[&]{return !frameQueue.empty();});
@@ -183,7 +154,7 @@ int OpenCVViewer::imuWriter(char *SequenceDirectoryBuf, pthread_mutex_t *imuData
 
 	IMUDATAOUTPUT_TypeDef *imuOutput = imuOutputBuffer;
 
-	while (SaveIMU) {
+	while (saveFramesAndIMU) {
 		pthread_mutex_lock(imuDataReadyMux);
 
 		if (sampleIndex == 0) {
@@ -214,14 +185,15 @@ int OpenCVViewer::imuWriter(char *SequenceDirectoryBuf, pthread_mutex_t *imuData
 }
 
 //Streams using OpenCV Application
-//Converts the 10 bit data to 8 bit data and splits the left an d right image separately
+//Converts the 24 bit data to 2 x 10bit data for left and right images
 int OpenCVViewer::TaraViewer()
 {
+	const int numberOfFrameQueueStructs = 4;
 	char WaitKeyStatus;
 	Mat FullImage;
 	int BrightnessVal = 4;		//Default Value
 
-	FrameQueueStruct frameQueueStructs[4];
+	FrameQueueStruct frameQueueStructs[numberOfFrameQueueStructs];
 	int frameQueueStructsIndex = 0;
 
 	char TimeStampBuf[32];
@@ -238,6 +210,25 @@ int OpenCVViewer::TaraViewer()
 	std::future<int> frameWriterFuture;
 	std::future<BOOL> imuReaderFuture;
 	std::future<int> imuWriterFuture;
+
+	auto stopSavingFramesAndIMU = [&]() {
+		saveFramesAndIMU = false;
+
+		cout << "Last frame index:" << frameWriterFuture.get() << endl;
+		cout << "Last IMU sample index:" << imuWriterFuture.get() << endl;
+
+		// Resetting to IMU disabled mode
+		IMUDATAINPUT_TypeDef imuInput = {IMU_CONT_UPDT_DIS, IMU_AXES_VALUES_MIN};
+		if(!ControlIMUCapture(&imuInput)) {
+			cout << "ControlIMUCapture Failed" << endl;
+		}
+
+		if (imuReaderFuture.wait_for(std::chrono::milliseconds(500)) == std::future_status::timeout) {
+			cout << "Timeout waiting for IMU reader to finish." << endl;
+		} else if (!imuReaderFuture.get()) {
+			cout << "IMU reader finish error!!" << endl;
+		}
+	};
 
 	//Mutex initialization
 	pthread_mutex_t	imuDataReadyMux;
@@ -262,7 +253,8 @@ int OpenCVViewer::TaraViewer()
 	//Streams the Camera using the OpenCV Video Capture Object
 	while(1)
 	{
-		frameQueueStructsIndex = frameQueueStructsIndex++ % 4;
+		frameQueueStructsIndex++;
+		frameQueueStructsIndex %= numberOfFrameQueueStructs;
 		FrameQueueStruct *fqs = &(frameQueueStructs[frameQueueStructsIndex]);
 
 		if(!_Disparity.GrabFrame(&(fqs->left), &(fqs->right), &(fqs->timeVal))) //Reads the frame and returns the rectified image
@@ -271,20 +263,28 @@ int OpenCVViewer::TaraViewer()
 			break;
 		}
 
-		if (!SaveFrames) {
+		int frameQueueSize = 0;
+		if (!saveFramesAndIMU) {
 			//concatenate both the image as single image
 			hconcat(fqs->left, fqs->right, FullImage);
 			imshow("Input Image", FullImage);
 		} else {
 			std::lock_guard<std::mutex> lk(frameQueueMux);
 			frameQueue.push(fqs);
+			frameQueueSize = frameQueue.size();
 			frameQueueCond.notify_one();
 		}
+
+		if (frameQueueSize >= numberOfFrameQueueStructs) {
+			cout << "frameQueue overflow. Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
+		}
+
 
 		//waits for the Key input
 		WaitKeyStatus = waitKey(1);
 		if(WaitKeyStatus == 'q' || WaitKeyStatus == 'Q' || WaitKeyStatus == 27) //Quit
 		{
+			stopSavingFramesAndIMU();
 			destroyAllWindows();
 			break;
 		}
@@ -406,8 +406,8 @@ int OpenCVViewer::TaraViewer()
 		}
 		else if(WaitKeyStatus == 'v' || WaitKeyStatus == 'V') // Toggle saving frames
 		{
-			SaveFrames = !SaveFrames;
-			if (SaveFrames)
+			saveFramesAndIMU = !saveFramesAndIMU;
+			if (saveFramesAndIMU)
 			{
 				time(&t);
 				localtime_r(&t, &tm);
@@ -416,39 +416,27 @@ int OpenCVViewer::TaraViewer()
 					cout << "Saving frames to " << SequenceDirectoryBuf << endl;
 				} else {
 					cout << "Error creating directory " << SequenceDirectoryBuf << " errno:" << errno << endl;
-					SaveFrames = false;
+					saveFramesAndIMU = false;
 				}
 				frameWriterFuture = std::async(std::bind(&OpenCVViewer::FrameWriter, this, SequenceDirectoryBuf));
+
+				//Configuring IMU update mode
+				IMUDATAINPUT_TypeDef imuInput = {IMU_CONT_UPDT_EN, IMU_AXES_VALUES_MIN};
+
+				//Setting the IMU update mode using HID command
+				if(!ControlIMUCapture(&imuInput)) {
+					cout << "ControlIMUCapture Failed\n";
+				}
 
 				imuWriterFuture = std::async(std::bind(&OpenCVViewer::imuWriter, this, SequenceDirectoryBuf, &imuDataReadyMux));
 				imuReaderFuture = std::async(&GetIMUValueBuffer, &imuDataReadyMux, imuOutputBuffer);
 			}
 			else
 			{
-				int lastFrameIndex = frameWriterFuture.get();
-				cout << "Last frame index:" << lastFrameIndex << endl;
-
-				SaveIMU = false;
-				cout << "Last IMU sample index:" << imuWriterFuture.get() << endl;
-
-				//Resetting the IMU update to disable mode
-				IMUDATAINPUT_TypeDef imuInput = {IMU_CONT_UPDT_DIS, IMU_AXES_VALUES_MIN};
-				BOOL uStatus = ControlIMUCapture(&imuInput);
-				if(uStatus == FALSE) {
-					cout << "ControlIMUCapture Failed" << endl;
-					return FALSE;
-				}
-
-				if (imuReaderFuture.wait_for(std::chrono::milliseconds(100)) == std::future_status::timeout) {
-					cout << "Timeout waiting for IMU reader to finish." << endl;
-					return FALSE;
-				} else if (!imuReaderFuture.get()) {
-					cout << "IMU reader finish error!!" << endl;
-				}
+				stopSavingFramesAndIMU();
 			}
 		}
 	}
-
 
 	return TRUE;
 }
