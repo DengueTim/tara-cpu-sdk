@@ -170,7 +170,7 @@ int OpenCVViewer::imuWriter(char *SequenceDirectoryBuf, pthread_mutex_t *imuData
 //Converts the 24 bit data to 2 x 10bit data for left and right images
 int OpenCVViewer::TaraViewer()
 {
-	const int numberOfFrameQueueStructs = 16;
+	const int numberOfFrameQueueStructs = 256;
 	char WaitKeyStatus;
 	Mat FullImage;
 	int BrightnessVal = 4;		//Default Value
@@ -258,11 +258,11 @@ int OpenCVViewer::TaraViewer()
 			frameQueueCond.notify_one();
 		}
 
-		if (frameQueueSize >= (numberOfFrameQueueStructs * 3) / 4) {
-			cout << "frameQueue 3/4 full! Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
-		} else if (frameQueueSize >= numberOfFrameQueueStructs) {
+		if (frameQueueSize >= numberOfFrameQueueStructs) {
 			cout << "frameQueue overflow!! Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
 			return FALSE;
+		} else if (frameQueueSize >= (numberOfFrameQueueStructs * 3) / 4) {
+			cout << "frameQueue 3/4 full! Queue size:" << frameQueueSize << " numberOfFrameQueueStructs:" << numberOfFrameQueueStructs << endl;
 		}
 
 
