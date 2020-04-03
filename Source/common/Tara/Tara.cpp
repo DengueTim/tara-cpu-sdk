@@ -159,9 +159,6 @@ BOOL TaraCamParameters::ComputeRectifyPrams()
 	
 	stereoRectify( M1, D1, M2, D2, img_size, R, T, R1, R2, PRect1, PRect2, Q, cv::CALIB_ZERO_DISPARITY, 0, img_size, &roi1, &roi2 );
 	
-	cout << P2 << endl;
-	cout << PRect2 << endl;
-
 	initUndistortRectifyMap(M1, D1, R1, PRect1, img_size, CV_16SC2, map11, map12);
 	initUndistortRectifyMap(M2, D2, R2, PRect2, img_size, CV_16SC2, map21, map22);
 

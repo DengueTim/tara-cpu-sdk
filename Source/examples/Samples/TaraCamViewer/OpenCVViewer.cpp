@@ -405,6 +405,31 @@ int OpenCVViewer::TaraViewer()
 					cout << "Error creating directory " << SequenceDirectoryBuf << " errno:" << errno << endl;
 					saveFramesAndIMU = false;
 				}
+
+				sprintf(FilenameBuf, "%s/calib_cam_to_cam.txt", SequenceDirectoryBuf);
+
+				FILE *c2cFile = fopen(FilenameBuf, "w");
+				if (!c2cFile) {
+					cout << "Error creating " << FilenameBuf << "for writing. " << endl;
+					return FALSE;
+				}
+
+				fprintf(c2cFile, "P_rect_01:");
+				MatIterator_<double> it, end;
+				Mat PRect = _Disparity._TaraCamParameters.PRect2.clone();
+				PRect.at<double>(0, 3) = PRect.at<double>(0, 3) * 0.001; // mm to meters.
+				for( it = PRect.begin<double>(), end = PRect.end<double>(); it != end; ++it)
+				{
+					fprintf(c2cFile, " %.6e", *it);
+				}
+				fprintf(c2cFile, "\n");
+
+				fflush(c2cFile);
+				fclose(c2cFile);
+
+				//cout << _Disparity._TaraCamParameters.P2 << endl;
+				//cout << _Disparity._TaraCamParameters.PRect2 << endl;
+
 				frameWriterFuture = std::async(std::bind(&OpenCVViewer::FrameWriter, this, SequenceDirectoryBuf));
 
 				imuReaderFuture = std::async(&GetIMUValueBuffer, &imuQueueMux, &imuQueueCond, &imuQueue);
