@@ -67,7 +67,12 @@ int xioctl(int fd, int IOCTL_X, void *arg);
 class TaraCamParameters
 {
 public:
-
+	//Variables to incorporate the intrinsic and extrinsic files
+	cv::Mat M1, D1, M2, D2;
+	cv::Mat R, T;
+	cv::Mat P1, P2;
+	// Rectified Projection Matrices. Prect2 has left camera baseline offset.
+	cv::Mat PRect1, PRect2;
 	cv::Mat Q;
 
 	//Constructor
@@ -87,9 +92,6 @@ private:
 	//Maximum width and height of the camera supported
 	int gImageWidth, gImageHeight;
 
-	//Variables to incorporate the intrinsic and extrinsic files
-	cv::Mat M1, D1, M2, D2;
-	cv::Mat R, T;
 	cv::Mat map11, map12, map21, map22;	
 	
 	//Loading the camera param
@@ -146,6 +148,9 @@ public:
 
 	//Gets the Stream Mode of the camera
 	BOOL GetStreamMode(UINT32 *StreamMode);
+
+	//Object to access the Q matrix connected
+	TaraCamParameters _TaraCamParameters;
 
 private:
 	//Disparity algorithm
@@ -211,9 +216,6 @@ private:
 
 	//Initialises the Camera Device with the passed width and height
 	BOOL Init(bool GenerateDisparity);
-
-	//Object to access the Q matrix connected
-	TaraCamParameters _TaraCamParameters; 
 };
 
 class CameraEnumeration

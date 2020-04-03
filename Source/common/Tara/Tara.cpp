@@ -135,6 +135,9 @@ BOOL TaraCamParameters::LoadCameraMatrix()
     fs["R"] >> R;
     fs["T"] >> T;
 
+    fs["P1"] >> P1;
+    fs["P2"] >> P2;
+
 	//Computes the Q Matrix from the Files loaded
 	ComputeRectifyPrams();
 
@@ -150,14 +153,17 @@ BOOL TaraCamParameters::ComputeRectifyPrams()
 	if(DEBUG_ENABLED)
 		cout << "Q Matrix Computation !!" << endl;
 		
-	cv::Mat R1, P1, R2, P2;
+	cv::Mat R1, R2;
 	cv::Rect roi1, roi2;
 	cv::Size img_size(gImageWidth, gImageHeight);
 	
-	stereoRectify( M1, D1, M2, D2, img_size, R, T, R1, R2, P1, P2, Q, cv::CALIB_ZERO_DISPARITY, 0, img_size, &roi1, &roi2 );
+	stereoRectify( M1, D1, M2, D2, img_size, R, T, R1, R2, PRect1, PRect2, Q, cv::CALIB_ZERO_DISPARITY, 0, img_size, &roi1, &roi2 );
 	
-	initUndistortRectifyMap(M1, D1, R1, P1, img_size, CV_16SC2, map11, map12);
-	initUndistortRectifyMap(M2, D2, R2, P2, img_size, CV_16SC2, map21, map22);
+	cout << P2 << endl;
+	cout << PRect2 << endl;
+
+	initUndistortRectifyMap(M1, D1, R1, PRect1, img_size, CV_16SC2, map11, map12);
+	initUndistortRectifyMap(M2, D2, R2, PRect2, img_size, CV_16SC2, map21, map22);
 
 	return TRUE;
 }
