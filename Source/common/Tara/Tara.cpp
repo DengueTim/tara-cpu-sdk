@@ -311,7 +311,7 @@ BOOL Disparity::InitCamera(bool GenerateDisparity, bool FilteredDisparityMap)
 }
 
 //Grabs the frame, converts it to 8 bit, splits the left and right frame and returns the rectified frame
-BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *timeVal)
+BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *timeVal, bool rectify)
 {
 	//Read the frame from camera
 	//Two 10bit images in BGR8
@@ -371,8 +371,13 @@ BOOL Disparity::GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *time
 	//Splitting the data
 	//split(InputFrame10bit, StereoFrames);
 
-	//Rectify Frames
-	_TaraCamParameters.RemapStereoImage(LeftFrame, RightFrame, LeftImage, RightImage);
+	if (rectify) {
+		//Rectify Frames
+		_TaraCamParameters.RemapStereoImage(LeftFrame, RightFrame, LeftImage, RightImage);
+	} else {
+		LeftFrame.copyTo(*LeftImage);
+		RightFrame.copyTo(*RightImage);
+	}
 
 	return TRUE;
 }

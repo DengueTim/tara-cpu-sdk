@@ -3,3 +3,15 @@ build
 .project
 .settings
 
+/Source/common/Tara/libecon_tara.so
+/Source/common/xunit/libecon_xunit.so
+/Source/examples/Applications/FaceDetection/FaceDetection
+/Source/examples/Applications/HeightEstimation/HeightCalibration/HeightCalibration
+/Source/examples/Applications/HeightEstimation/HeightEstimation/HeightEstimation
+/Source/examples/Applications/VolumeEstimation/VolumeEstimation
+/Source/examples/IMU/ImuApplication
+/Source/examples/PointCloud/PointCloud
+/Source/examples/Samples/TaraCamViewer/TaraCamViewer
+/Source/examples/Samples/TaraDepthViewer/TaraDepthViewer
+/Source/examples/Samples/TaraDisparityViewer/TaraDisparityViewer
+

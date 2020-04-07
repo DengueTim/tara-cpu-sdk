@@ -123,7 +123,7 @@ public:
 	BOOL InitCamera(bool GenerateDisparity, bool FilteredDisparityMap);
 
 	//Grabs the frame, converts it to 8 bit, splits the left and right frame and returns the rectified frame
-	BOOL GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *timeVal = 0);
+	BOOL GrabFrame(cv::Mat *LeftImage, cv::Mat *RightImage, timeval *timeVal = 0, bool rectify = true);
 
 	//Estimates the disparity of the camera
 	BOOL GetDisparity(cv::Mat LImage, cv::Mat RImage, cv::Mat *mDisparityMap, cv::Mat *disp_filtered);

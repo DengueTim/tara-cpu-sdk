@@ -174,6 +174,7 @@ int OpenCVViewer::TaraViewer()
 	char WaitKeyStatus;
 	Mat FullImage;
 	int BrightnessVal = 4;		//Default Value
+	bool rectifyImages = false;
 
 	FrameQueueStruct frameQueueStructs[numberOfFrameQueueStructs];
 	int frameQueueStructsIndex = 0;
@@ -229,6 +230,7 @@ int OpenCVViewer::TaraViewer()
 	cout << "Press e/E on the Image Window to change the exposure of the camera" << endl;
 	cout << "Press s/S on the Image Window to save a single frame" << endl;
 	cout << "Press v/V on the Image Window to toggle saving frames" << endl << endl;
+	cout << "Press r/R on the Image Window to toggle image rectification." << endl << endl;
 
 	cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 	string Inputline;
@@ -240,7 +242,7 @@ int OpenCVViewer::TaraViewer()
 		frameQueueStructsIndex %= numberOfFrameQueueStructs;
 		FrameQueueStruct *fqs = &(frameQueueStructs[frameQueueStructsIndex]);
 
-		if(!_Disparity.GrabFrame(&(fqs->left), &(fqs->right), &(fqs->timeVal))) //Reads the frame and returns the rectified image
+		if(!_Disparity.GrabFrame(&(fqs->left), &(fqs->right), &(fqs->timeVal), rectifyImages)) //Reads and returns L/R images
 		{
 			destroyAllWindows();
 			break;
@@ -441,6 +443,16 @@ int OpenCVViewer::TaraViewer()
 				imuWriterFuture = std::async(std::bind(&OpenCVViewer::imuWriter, this, SequenceDirectoryBuf, &imuDataReadyMux));
 			} else {
 				stopSavingFramesAndIMU();
+			}
+		}
+		else if (WaitKeyStatus == 'r' || WaitKeyStatus == 'r') // Toggle image rectification
+		{
+			if (rectifyImages) {
+				rectifyImages = false;
+				cout << endl << "Disabled image rectification." << endl;
+			} else {
+				rectifyImages = true;
+				cout << endl << "Enabled image rectification." << endl;
 			}
 		}
 	}
