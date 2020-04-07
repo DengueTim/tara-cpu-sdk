@@ -389,9 +389,9 @@ int OpenCVViewer::TaraViewer()
 			int millisecs = tv.tv_usec / 1000;
 			std::sprintf(TimeStampBuf, "%02d%02d%02d_%02d%02d%02d_%04d", tm.tm_mday, tm.tm_mon + 1, tm.tm_year - 100, tm.tm_hour, tm.tm_min, tm.tm_sec, millisecs);
 			cout << "Writing left and right images with time stamp:" << TimeStampBuf << endl;
-			std::sprintf(FilenameBuf, "%s/L_%s.png", cwd, TimeStampBuf);
+			std::sprintf(FilenameBuf, "%s/%s_L.png", cwd, TimeStampBuf);
 			imwrite(FilenameBuf, fqs->left);
-			std::sprintf(FilenameBuf, "%s/R_%s.png", cwd, TimeStampBuf);
+			std::sprintf(FilenameBuf, "%s/%s_R.png", cwd, TimeStampBuf);
 			imwrite(FilenameBuf, fqs->right);
 		}
 		else if(WaitKeyStatus == 'v' || WaitKeyStatus == 'V') // Toggle saving frames
