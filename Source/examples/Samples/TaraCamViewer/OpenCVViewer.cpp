@@ -122,7 +122,7 @@ int OpenCVViewer::FrameWriter(char *SequenceDirectoryBuf)
         }
 
 		int milliseconds = fqs->timeVal.tv_sec * 1000 + fqs->timeVal.tv_usec / 1000 - timeval_start.tv_sec * 1000 - timeval_start.tv_usec / 1000;
-		sprintf(FilenameBuf, "%s/%04d_%06d_L.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
+		sprintf(FilenameBuf, "%s/%05d_%07d_L.png", SequenceDirectoryBuf, FrameIndex, milliseconds);
 		imwrite(FilenameBuf, fqs->left);
 		*strrchr(FilenameBuf, 'L') = 'R';
 		imwrite(FilenameBuf, fqs->right);
